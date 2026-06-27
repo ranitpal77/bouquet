@@ -1,48 +1,32 @@
-# 🌸 Flower Bouquet
+# Flower Bouquet
 
-A beautiful, performant, and responsive infinite flower garden built with vanilla HTML5 Canvas, modern CSS, and JavaScript. The page automatically populates with a staggered wave of blooming flowers, customized ambient glowing background, and support for query-driven text greetings in high-quality fonts.
+An interactive digital flower bouquet garden built with vanilla HTML5 Canvas, CSS, and JavaScript. The page populates with blooming flowers, a GPU-accelerated ambient glowing background, and support for URL-customized greetings.
 
-## Features
+## Quick Links
 
-- **60 FPS Performance:** Fully optimized rendering path utilizing cached stem points, pre-computed leaf coordinates, reduced seed calculation loops (optimized from 200 down to 45 seeds for sunflowers), and no heavy canvas shadow blur filters.
-- **Layered Painting:** Employs a layered rendering sequence where stems are drawn first, followed by a soft dark base-mask shadow to hide origin coordinates, and finally the vibrant flower heads on top.
-- **Dreamy Ambient Background Glow:** Blends multiple overlapping radial gradients (left indigo, right rose, and center-bottom organic green) in CSS for a GPU-accelerated glow effect.
-- **Responsive Layout:** Stores flower coordinate positions as normalized relative values. Automatically scales and recomputes layout paths during screen orientation changes or window resize.
-- **Custom Situational Greeting Text:** Custom URL query parameters let you send personalized messages with premium typography loaded dynamically from Google Fonts.
+- Live Site: [bouquet.745482.xyz](https://bouquet.745482.xyz)
+- Custom Link Creator: [bouquet.745482.xyz/create](https://bouquet.745482.xyz/create)
+- Live Preset Demo: [bouquet.745482.xyz/?love](https://bouquet.745482.xyz/?love)
 
----
+## Core Interactions
 
-## 🛠️ URL Options & Query Parameters
+- **Interactive Sway Physics:** Flowers are simulated with a second-order spring-mass-damper system. Moving the mouse generates wind that pushes the flowers away, scaling dynamically with mouse velocity.
+- **Mobile Parallax and Motion:** Tilting the device sways the flowers collectively from their base points at the bottom of the screen. Shaking the device triggers a temporary wind gust proportional to acceleration.
+- **Constant Breeze:** A gentle, multi-frequency background wave keeps the garden swaying when idle.
 
-Customize the message and style of the garden simply by modifying the URL parameters:
+## Customization and Presets
 
-### 1. Custom Text
-Specify any greeting message:
-- `?text=Your+Custom+Message` or `?msg=Your+Custom+Message`
+You can pass query parameters to customize the text and typography style:
 
-### 2. Situational Preset Flags
-If no custom text is provided, you can trigger beautiful pre-formatted greetings:
-- `?birthday` ➔ *Happy Birthday! Wishing you a beautiful day 🌸🎂*
-- `?exam` ➔ *Best wishes for your exam! You've got this! 📝✨*
-- `?love` or `?anniversary` ➔ *Thinking of you always... ❤️🌸*
-- `?sorry` ➔ *I'm so sorry. Here are some flowers for you... 🌸🥺*
-- `?getwell` ➔ *Get well soon! Wishing you a speedy recovery 🌸🍵*
-- `?thankyou` or `?thanks` ➔ *Thank you so much! 🌸✨*
-- `?cheer` ➔ *Just a little garden to brighten your day! 🌸✨*
+- **Custom message:** `?text=Your+Message`
+- **Presets:** `?birthday`, `?love`, `?exam`, `?sorry`, `?getwell`, `?thankyou`, or `?cheer`.
+- **Typography:** Append `&font=mono` to use JetBrains Mono (defaults to Inter sans-serif).
 
-### 3. Font Style
-Select between two premium fonts:
-- Default: **Inter** (sans-serif)
-- Monospace option: Append `&font=mono` (or `&font=jetbrains`) to render text in **JetBrains Mono**.
+For a quick link builder UI, visit the creator page at `/create/`.
 
-*Example URL:*
-`https://bouquet.745482.xyz/?birthday&font=mono`
+## File Structure
 
----
-
-## 📂 File Structure
-
-The project has been separated into clean, modular files for maintainability:
-- `index.html` — Main HTML framework importing Google Fonts and linking styles/scripts.
-- `style.css` — GPU-accelerated CSS for multi-glow background, animations, and typography.
-- `script.js` — Core animation loop, coordinate scaling, precomputation logic, and URL routing.
+- `index.html` - Main entry point and Open Graph metadata.
+- `style.css` - Layout, styling, radial background, and SVG noise texture.
+- `script.js` - Coordinates caching, animation loop, spring physics, and input listeners.
+- `create/index.html` - Brutalist link builder tool.
