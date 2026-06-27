@@ -7,24 +7,44 @@ const START = Date.now();
 
 // Track mouse, device tilt (gyroscope), and motion (accelerometer) for sways & parallax
 let mouseX = window.innerWidth / 2;
-let parallaxX = 0;
-let parallaxY = 0;
+let lastMouseX = window.innerWidth / 2;
+let mouseSpeed = 0;
+let lastMouseTime = Date.now();
+
+let tiltLean = 0;
+let lastGamma = 0;
+let tiltSpeed = 0;
+
 let shakeWind = 0;
 
 window.addEventListener('mousemove', (e) => {
+    const now = Date.now();
+    const dt = Math.max(1, now - lastMouseTime);
+    const dx = e.clientX - lastMouseX;
+    
+    // Calculate mouse travel speed
+    const instSpeed = Math.abs(dx) / dt;
+    mouseSpeed += (instSpeed - mouseSpeed) * 0.2;
+    
+    lastMouseX = e.clientX;
     mouseX = e.clientX;
+    lastMouseTime = now;
 });
 
 // Bind sensor listeners for device orientation and motion acceleration
 function bindSensors() {
     window.addEventListener('deviceorientation', (e) => {
         if (e.gamma !== null) {
-            // Map left-right tilt (gamma) to a gentle horizontal offset (max 30px shift)
-            const targetPX = clamp(e.gamma, -20, 20) * 1.5;
+            // Map left-right tilt (gamma in degrees) to radians of rotation (max ~24 degrees sway target)
+            const targetTilt = clamp(e.gamma, -30, 30) * 0.014;
             
-            // Slow interpolation factor (0.04) for very smooth, soft sway transitions
-            parallaxX += (targetPX - parallaxX) * 0.04;
-            parallaxY = 0; // Disable up/down vertical movement entirely
+            // Calculate rotational tilt speed
+            const diff = Math.abs(e.gamma - lastGamma);
+            tiltSpeed += (diff - tiltSpeed) * 0.12;
+            
+            // Smoothly ease the device tilt lean rotation target
+            tiltLean += (targetTilt - tiltLean) * 0.05;
+            lastGamma = e.gamma;
         }
     });
 
@@ -32,10 +52,10 @@ function bindSensors() {
         const acc = e.acceleration; // Use pure acceleration (excluding gravity) to prevent constant shaking
         if (acc) {
             const speed = Math.abs(acc.x || 0) + Math.abs(acc.y || 0) + Math.abs(acc.z || 0);
-            // Threshold of 6.5 m/s^2 represents a deliberate shake gesture
-            if (speed > 6.5) {
-                // Trigger a smooth wind gust impulse
-                shakeWind = (Math.random() > 0.5 ? 1 : -1) * 0.35;
+            if (speed > 4.5) {
+                // Scale shake wind gust force directly by dynamic shake speed
+                const force = clamp((speed - 4.5) / 10, 0.2, 1.0);
+                shakeWind = (Math.random() > 0.5 ? 1 : -1) * force * 0.45;
             }
         }
     });
@@ -392,7 +412,9 @@ function spawnAutomaticFlowers() {
             wobble: Math.random() * Math.PI * 2,
             sd: def.sd,
             sl: def.sl,
-            dir: Math.random() < 0.5 ? 1 : -1
+            dir: Math.random() < 0.5 ? 1 : -1,
+            currentLean: 0,
+            leanVelocity: 0
         };
 
         flowers.push(f);
@@ -403,30 +425,47 @@ function spawnAutomaticFlowers() {
 function draw() {
     ctx.clearRect(0, 0, W, H);
 
-    // Slowly decay any wind gusts triggered by phone shaking
+    // Slowly decay dynamic speeds and shake gusts
     shakeWind *= 0.94;
+    mouseSpeed *= 0.95;
+    tiltSpeed *= 0.95;
 
     const now = Date.now();
     const t = now - START;
 
+    // Default light ambient breeze sway (constant gentle environment motion)
+    const ambientBreeze = Math.sin(t * 0.0008) * 0.035 + Math.cos(t * 0.0019) * 0.015;
+
+    // Calculate dynamic speed multipliers
+    const mouseSpeedFactor = 0.12 + clamp(mouseSpeed, 0, 3.5) * 0.25;
+    const tiltSpeedFactor = 0.18 + clamp(tiltSpeed / 6.0, 0, 1.0) * 0.82;
+
+    const activeTiltLean = tiltLean * tiltSpeedFactor;
+
     // 1. Draw static environment reflection pool (does not shift with device tilt)
     drawEnvironment();
 
-    // Pre-calculate interactive breeze sway based on cursor distance + shake motion wind
+    // Pre-calculate interactive sways using Spring-Mass-Damper physics
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
         
-        const dx = mouseX - f.tx;
-        const mouseLean = clamp(dx / W, -0.6, 0.6) * 0.08;
-        const leanTarget = mouseLean + shakeWind;
-        f.currentLean = f.currentLean ? f.currentLean + (leanTarget - f.currentLean) * 0.05 : leanTarget;
+        // Inverse mouse interaction: push away from the cursor (scaled by speed factor)
+        const dx = f.tx - mouseX; // positive if flower is to the right of mouse
+        const distRatio = clamp(1 - Math.abs(dx) / (W * 0.45), 0, 1);
+        const baseMouseLean = Math.sign(dx) * easeOut(distRatio) * 0.12; // Push away target
+        const mouseLean = baseMouseLean * mouseSpeedFactor;
+        
+        const leanTarget = mouseLean + shakeWind + activeTiltLean + ambientBreeze;
+        
+        // 2nd Order Spring-Mass-Damper physics solver
+        const springForce = (leanTarget - f.currentLean) * 0.075; // stiffness
+        f.leanVelocity += springForce;
+        f.leanVelocity *= 0.88; // damping drag
+        f.currentLean += f.leanVelocity;
     });
 
-    // 2. Draw stems & leaves with horizontal parallax displacement
-    ctx.save();
-    ctx.translate(parallaxX, 0);
-
+    // 2. Draw stems & leaves (rotation pivots directly from root base points at bottom)
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
@@ -456,7 +495,6 @@ function draw() {
 
         ctx.restore();
     });
-    ctx.restore();
 
     // 3. Draw static bottom shadow mask (does not shift with device tilt)
     const shadowGrad = ctx.createLinearGradient(0, H, 0, BASE - 160);
@@ -466,10 +504,7 @@ function draw() {
     ctx.fillStyle = shadowGrad;
     ctx.fillRect(0, BASE - 160, W, H - (BASE - 160));
 
-    // 4. Draw flower heads with horizontal parallax displacement
-    ctx.save();
-    ctx.translate(parallaxX, 0);
-
+    // 4. Draw flower heads (swayed in unison, pivoting from base points)
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
@@ -511,7 +546,6 @@ function draw() {
 
         ctx.restore();
     });
-    ctx.restore();
 
     requestAnimationFrame(draw);
 }
