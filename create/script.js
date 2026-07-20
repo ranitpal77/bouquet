@@ -16,7 +16,7 @@ let selectedFont = 'inter';
 
 function getBaseUrl() {
     const loc = window.location;
-    const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/index.html');
+    const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/');
     return loc.protocol + '//' + loc.host + pathname;
 }
 
