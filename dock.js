@@ -1,11 +1,13 @@
-// GardenDock — floating right-edge navigation dock.
-// Edge-proximity reveal, 5s idle auto-hide (dock + cursor), theme popover,
+// GardenDock — floating top-right-corner navigation dock.
+// Corner-proximity reveal, 5s idle auto-hide (dock + cursor), theme popover,
 // toolbox popover, fullscreen toggle. Popovers and windows keep it visible.
+// Automatically slides down to clear temporary top-right messages (toasts, alerts).
 const GardenDock = (() => {
     'use strict';
 
     const EDGE_PX = 70;
     const IDLE_MS = 5000;
+    const MSG_GAP = 12;
     const html = document.documentElement;
     const touchMode = window.matchMedia('(hover: none), (pointer: coarse)').matches;
 
@@ -173,6 +175,7 @@ const GardenDock = (() => {
     let dockShown = false;
     let idleTimer = null;
     let hideTimer = null;
+    let currentShift = 0;
 
     function showDock() {
         clearTimeout(hideTimer);
@@ -200,11 +203,19 @@ const GardenDock = (() => {
     const overUI = target =>
         !!(target && target.closest && target.closest('.dock, .dock-popover, .fw'));
 
+    // Reveal region tracks the dock's top-right corner: near the right edge
+    // AND within the vertical band the dock occupies (shifted for collisions).
+    function inRevealZone(x, y) {
+        const nearRight = x >= window.innerWidth - EDGE_PX;
+        const band = currentShift + (dock.offsetHeight || 160) + EDGE_PX;
+        return nearRight && y <= band;
+    }
+
     function onActivity(e) {
         html.classList.remove('cursor-idle');
 
         const onUI = overUI(e.target);
-        const inZone = e.clientX >= window.innerWidth - EDGE_PX;
+        const inZone = inRevealZone(e.clientX, e.clientY);
 
         if (inZone || openPop) {
             showDock();
@@ -224,6 +235,68 @@ const GardenDock = (() => {
         }, IDLE_MS);
     }
 
+    // ---------- Collision avoidance with top-right messages ----------
+    // Common markup for transient messages (toasts, alerts, notifications, status).
+    const MSG_SELECTOR = '.toast, .notification, .notice, .snackbar, .alert, ' +
+        '[role="alert"], [role="status"], [aria-live="polite"], [aria-live="assertive"]';
+
+    // Dock geometry at its resting anchor — offset* ignores transforms,
+    // so this stays stable regardless of the hide-slide or collision shift.
+    function dockRestRect() {
+        const w = dock.offsetWidth || 60;
+        const h = dock.offsetHeight || 160;
+        const left = dock.offsetLeft;
+        const top = dock.offsetTop;
+        return { left, right: left + w, top, width: w, height: h };
+    }
+
+    function setShift(px) {
+        px = Math.max(0, Math.round(px));
+        const maxShift = Math.max(0, window.innerHeight - (dock.offsetHeight || 160) - dock.offsetTop);
+        px = Math.min(px, maxShift);
+        if (px === currentShift) return;
+        currentShift = px;
+        dock.style.setProperty('--dk-shift', px + 'px');
+        if (openPop) positionPop(openPop, openPop === themePop ? themeBtn : toolsBtn);
+    }
+
+    function updateCollision() {
+        const rest = dockRestRect();
+        let needed = 0;
+        document.querySelectorAll(MSG_SELECTOR).forEach(el => {
+            if (el.closest('.dock, .dock-popover, .fw')) return;
+            const s = getComputedStyle(el);
+            if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity || '1') < 0.05) return;
+            const m = el.getBoundingClientRect();
+            if (m.width === 0 || m.height === 0) return;
+            const overlapX = m.right > rest.left - MSG_GAP && m.left < rest.right + MSG_GAP;
+            const nearTop = m.top < rest.top + rest.height + currentShift;
+            if (overlapX && nearTop) {
+                needed = Math.max(needed, m.bottom + MSG_GAP - rest.top);
+            }
+        });
+        setShift(needed);
+    }
+
+    let collideRaf = null;
+    const scheduleCollision = () => {
+        if (collideRaf) return;
+        collideRaf = requestAnimationFrame(() => {
+            collideRaf = null;
+            updateCollision();
+        });
+    };
+
+    const msgObserver = new MutationObserver(scheduleCollision);
+    msgObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'role', 'aria-live', 'hidden']
+    });
+    window.addEventListener('resize', scheduleCollision);
+    updateCollision();
+
     if (touchMode) {
         // No hover/edge proximity on touch — keep the dock available
         requestAnimationFrame(() => showDock());
@@ -235,6 +308,7 @@ const GardenDock = (() => {
     return {
         show: showDock,
         hide: hideDock,
-        closePopovers
+        closePopovers,
+        refresh: updateCollision
     };
 })();

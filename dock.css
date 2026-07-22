@@ -32,8 +32,11 @@ html.cursor-idle * {
 /* ---------- Dock ---------- */
 .dock {
     position: fixed;
-    top: 50%;
+    top: 18px;
     right: 18px;
+    /* --dk-slide: hidden/visible horizontal slide · --dk-shift: collision offset (set by JS) */
+    --dk-slide: 90px;
+    --dk-shift: 0px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -45,14 +48,14 @@ html.cursor-idle * {
     -webkit-backdrop-filter: blur(24px) saturate(1.25);
     box-shadow: var(--dk-shadow);
     opacity: 0;
-    transform: translateY(-50%) translateX(90px);
+    transform: translateY(var(--dk-shift)) translateX(var(--dk-slide));
     pointer-events: none;
     transition: opacity 0.45s ease, transform 0.55s var(--dk-ease);
 }
 
 .dock.dock-visible {
     opacity: 1;
-    transform: translateY(-50%) translateX(0);
+    --dk-slide: 0px;
     pointer-events: auto;
 }
 
@@ -515,40 +518,7 @@ html.is-fullscreen .dock-btn .ic-expand {
     }
 }
 
-.am-play {
-    flex: none;
-    width: 26px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    color: var(--dk-text);
-    cursor: pointer;
-    outline: none;
-    transition: background 0.2s ease, color 0.2s ease;
-}
-
-.am-play:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-}
-
-.am-play .ic-pause {
-    display: none;
-}
-
-.am-row.am-on .am-play .ic-pause {
-    display: block;
-}
-
-.am-row.am-on .am-play .ic-play {
-    display: none;
-}
-
-/* On/off switch */
+/* On/off switch — sole play control per channel */
 .am-switch {
     position: relative;
     flex: none;
@@ -676,6 +646,7 @@ html.is-fullscreen .dock-btn .ic-expand {
 /* ---------- Responsive ---------- */
 @media (max-width: 600px) {
     .dock {
+        top: 12px;
         right: 10px;
         padding: 7px;
         gap: 4px;
