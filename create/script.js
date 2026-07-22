@@ -14,6 +14,37 @@ const backgroundSelect = document.getElementById('background-select');
 let selectedPreset = null;
 let selectedFont = 'inter';
 
+// Responsive maximum flower count by device tier
+function getMaxFlowers() {
+    const w = window.innerWidth;
+    if (w < 600) return 25;
+    if (w < 1024) return 50;
+    return 100;
+}
+
+
+let toastTimer = null;
+function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2000);
+}
+
+// Keep the flower-count input's max attribute (and hint) in sync with the tier,
+function applyFlowerMax() {
+    const max = getMaxFlowers();
+    flowerCountInput.max = max;
+    flowerCountInput.placeholder = `Auto count (Max ${max})`;
+    const val = parseInt(flowerCountInput.value, 10);
+    if (Number.isFinite(val) && val > max) {
+        flowerCountInput.value = max;
+        updateLink();
+    }
+}
+
 function getBaseUrl() {
     const loc = window.location;
     const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/');
@@ -47,7 +78,7 @@ function updateLink() {
 
     const countValue = parseInt(flowerCountInput.value, 10);
     if (Number.isFinite(countValue) && countValue > 0) {
-        appendParam('count', Math.min(countValue, 100));
+        appendParam('count', Math.min(countValue, getMaxFlowers()));
     }
 
     if (flowerTypeSelect.value) {
@@ -66,7 +97,8 @@ function updateLink() {
         appendParam('bg', backgroundSelect.value);
     }
 
-    linkPreview.textContent = url;
+    linkPreview.value = url;
+    linkPreview.scrollLeft = 0;
     btnPreview.href = url;
 }
 
@@ -106,7 +138,15 @@ fontSelector.addEventListener('click', (e) => {
     updateLink();
 });
 
-flowerCountInput.addEventListener('input', updateLink);
+flowerCountInput.addEventListener('input', () => {
+    const max = getMaxFlowers();
+    const val = parseInt(flowerCountInput.value, 10);
+    if (Number.isFinite(val) && val > max) {
+        flowerCountInput.value = max;
+        showToast(`MAX is ${max}`);
+    }
+    updateLink();
+});
 flowerTypeSelect.addEventListener('change', updateLink);
 growValueInput.addEventListener('input', updateLink);
 growUnitSelect.addEventListener('change', () => {
@@ -121,14 +161,11 @@ growUnitSelect.addEventListener('change', () => {
 backgroundSelect.addEventListener('change', updateLink);
 
 btnCopy.addEventListener('click', () => {
-    const textToCopy = linkPreview.textContent;
+    const textToCopy = linkPreview.value;
     if (!textToCopy) return;
 
     navigator.clipboard.writeText(textToCopy).then(() => {
-        toast.classList.add('show');
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 2000);
+        showToast('Link copied! 🌸');
     }).catch(err => {
         console.error('Failed to copy: ', err);
     });
@@ -136,17 +173,9 @@ btnCopy.addEventListener('click', () => {
 
 updateLink();
 
-// Live local clock
-const clockElement = document.getElementById('clock');
-function updateClock() {
-    clockElement.textContent = new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
-}
-updateClock();
-setInterval(updateClock, 1000);
+// Device-based flower-count cap on load and whenever the viewport
+applyFlowerMax();
+window.addEventListener('resize', applyFlowerMax);
 
 // Shared procedural sky background for creator UI
 const bgCanvas = document.getElementById('bg');
@@ -165,10 +194,8 @@ function resizeSky() {
 function drawSky() {
     const frame = creatorSky.render(bgCtx, Date.now() - SKY_START);
     if (!frame) {
-        // Minimal: clear the canvas so the original CSS background shows through
         bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
     } else if (frame.lighting) {
-        // Ambient lighting wash matching the garden page
         const [lr, lg, lb, la] = frame.lighting;
         if (la > 0.004) {
             bgCtx.fillStyle = `rgba(${Math.round(lr)}, ${Math.round(lg)}, ${Math.round(lb)}, ${la.toFixed(3)})`;
