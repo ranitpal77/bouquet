@@ -670,3 +670,44 @@ function updateClock() {
 }
 updateClock();
 setInterval(updateClock, 1000);
+
+// Responsive layout adjustment for the message area to avoid dock collision
+(() => {
+    let dockEl = null;
+    const ui = document.getElementById('ui');
+
+    function adjustUiLayout() {
+        if (!ui) return;
+        if (!dockEl) dockEl = document.querySelector('.dock');
+        
+        if (window.innerWidth > 600 && dockEl) {
+            const dockWidth = dockEl.offsetWidth || 62;
+            const style = window.getComputedStyle(dockEl);
+            const rightOffset = parseFloat(style.right) || 18;
+            const dockSpace = rightOffset + dockWidth;
+            const gap = dockSpace + 24;
+            
+            ui.style.left = `${gap}px`;
+            ui.style.right = `${gap}px`;
+            ui.style.width = 'auto';
+        } else {
+            ui.style.left = '';
+            ui.style.right = '';
+            ui.style.width = '';
+        }
+    }
+
+    if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(() => adjustUiLayout());
+        observer.observe(document.body);
+    }
+    window.addEventListener('resize', adjustUiLayout);
+    window.addEventListener('load', adjustUiLayout);
+    
+    const interval = setInterval(() => {
+        if (document.querySelector('.dock')) {
+            adjustUiLayout();
+            clearInterval(interval);
+        }
+    }, 100);
+})();

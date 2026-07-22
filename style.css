@@ -57,6 +57,9 @@ canvas {
     animation: fadeIn 2s ease-in-out forwards;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
     /* Keeps light text legible on bright day sky */
+    word-break: break-word;
+    overflow-wrap: break-word;
+    padding: 0 20px;
 }
 
 #clock {
