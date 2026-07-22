@@ -94,10 +94,14 @@ const AmbientSounds = (() => {
     }
 
     function syncRow(c) {
-        if (!c.ui || !c.ui.row.isConnected) return;
+        // Guard only on ui presence — the row may not be in the DOM yet at
+        // build time; syncRow always targets the latest c.ui, so a detached
+        // node from a closed window is never touched after reassignment.
+        if (!c.ui) return;
         c.ui.row.classList.toggle('am-on', c.on);
         c.ui.toggle.checked = c.on;
-        c.ui.play.setAttribute('aria-label', (c.on ? 'Pause ' : 'Play ') + c.def.name);
+        c.ui.vol.value = c.level;
+        c.ui.vol.style.setProperty('--fill', (c.level * 100) + '%');
     }
 
     function buildRow(def) {
@@ -110,10 +114,6 @@ const AmbientSounds = (() => {
                 '<div class="am-top">' +
                     '<span class="am-name">' + def.name + '</span>' +
                     '<span class="am-eq" aria-hidden="true"><span></span><span></span><span></span></span>' +
-                    '<button class="am-play" type="button">' +
-                        '<svg class="ic-play" width="13" height="13" viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12Z" fill="currentColor"/></svg>' +
-                        '<svg class="ic-pause" width="13" height="13" viewBox="0 0 24 24"><path d="M7.5 5h3v14h-3zM13.5 5h3v14h-3z" fill="currentColor"/></svg>' +
-                    '</button>' +
                     '<label class="am-switch">' +
                         '<input type="checkbox" aria-label="' + def.name + ' on/off">' +
                         '<span class="am-knob"></span>' +
@@ -123,21 +123,19 @@ const AmbientSounds = (() => {
             '</div>';
 
         const toggle = row.querySelector('.am-switch input');
-        const play = row.querySelector('.am-play');
         const vol = row.querySelector('.am-vol');
 
         vol.value = c.level;
         vol.style.setProperty('--fill', (c.level * 100) + '%');
 
         toggle.addEventListener('change', () => setOn(def.id, toggle.checked));
-        play.addEventListener('click', () => setOn(def.id, !c.on));
         vol.addEventListener('input', () => {
             const v = parseFloat(vol.value);
             vol.style.setProperty('--fill', (v * 100) + '%');
             setLevel(def.id, v);
         });
 
-        c.ui = { row, toggle, play };
+        c.ui = { row, toggle, vol };
         syncRow(c);
         return row;
     }
@@ -155,12 +153,14 @@ const AmbientSounds = (() => {
             const foot = document.createElement('div');
             foot.className = 'am-foot';
             foot.innerHTML =
-                '<span class="am-hint">Mix &amp; layer freely</span>' +
+                '<span class="am-hint">Plays in background</span>' +
                 '<button class="am-stop" type="button">Stop all</button>';
             foot.querySelector('.am-stop').addEventListener('click', stopAll);
             body.appendChild(foot);
-        },
-        onClose: stopAll
+        }
+        // No onClose handler: audio engine runs independently of the window.
+        // Rows re-sync from channel state on every open (buildRow → syncRow),
+        // so reopening restores toggles and volume levels automatically.
     });
 
     return { stopAll };
