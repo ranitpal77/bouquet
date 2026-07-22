@@ -25,7 +25,6 @@
 <body>
 
     <canvas id="bg"></canvas>
-    <div id="clock"></div>
 
     <div class="container">
         <h1>Bouquet Creator</h1>
@@ -59,7 +58,8 @@
         <div class="form-group">
             <label>Flower options</label>
             <div class="garden-grid">
-                <input type="number" id="flower-count" min="1" max="100" placeholder="Auto count" autocomplete="off">
+                <input type="number" id="flower-count" min="1" max="100" placeholder="Auto count (Max 100)"
+                    autocomplete="off">
                 <select id="flower-type">
                     <option value="">Random mix</option>
                     <option value="lily">Lily</option>
@@ -95,7 +95,7 @@
 
         <div class="form-group">
             <label>Your shareable link</label>
-            <div class="link-container" id="link-preview"></div>
+            <input type="text" class="link-container" id="link-preview" readonly>
         </div>
 
         <div class="button-group">

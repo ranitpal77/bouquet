@@ -50,22 +50,6 @@ body::before {
     pointer-events: none;
 }
 
-#clock {
-    position: absolute;
-    top: 20px;
-    left: 30px;
-    color: rgba(255, 255, 255, 0.5);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 300;
-    letter-spacing: 2px;
-    user-select: none;
-    pointer-events: none;
-    z-index: 3;
-    font-variant-numeric: tabular-nums;
-    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-}
-
 .container {
     width: 90%;
     max-width: 480px;
@@ -248,7 +232,8 @@ select option {
 }
 
 .link-container {
-    margin-top: 25px;
+    width: 100%;
+    height: 42px;
     padding: 12px 14px;
     background: rgba(0, 0, 0, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -256,11 +241,9 @@ select option {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     color: rgba(255, 255, 255, 0.45);
-    word-break: break-all;
     text-align: left;
-    min-height: 42px;
-    display: flex;
-    align-items: center;
+    outline: none;
+    cursor: text;
 }
 
 .button-group {
@@ -364,12 +347,6 @@ button,
     body {
         padding: 30px 15px;
         gap: 25px;
-    }
-
-    #clock {
-        top: 12px;
-        left: 15px;
-        font-size: 11px;
     }
 
     .container {
