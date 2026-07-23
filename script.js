@@ -472,8 +472,9 @@ function draw() {
 
     const now = Date.now();
     const t = now - START;
+    const animT = sky.getAcceleratedTime(t);
 
-    const ambientBreeze = Math.sin(t * 0.0008) * 0.035 + Math.cos(t * 0.0019) * 0.015;
+    const ambientBreeze = Math.sin(animT * 0.0008) * 0.035 + Math.cos(animT * 0.0019) * 0.015;
     const mouseSpeedFactor = 0.12 + clamp(mouseSpeed, 0, 3.5) * 0.25;
     const tiltSpeedFactor = 0.18 + clamp(tiltSpeed / 6.0, 0, 1.0) * 0.82;
     const activeTiltLean = tiltLean * tiltSpeedFactor;
@@ -565,7 +566,7 @@ function draw() {
             headAngle = f.headAngle;
         }
 
-        const wob = Math.sin(t * 0.0013 + f.wobble) * 0.05;
+        const wob = Math.sin(animT * 0.0013 + f.wobble) * 0.05;
 
         ctx.save();
         ctx.translate(f.bx, f.by);
@@ -659,17 +660,109 @@ if (textParam) {
     uiElement.style.display = 'none';
 }
 
-// Live local clock
+// Live local clock & Dynamic Sky Timelapse Easter Egg trigger
 const clockElement = document.getElementById('clock');
+let clockClickCount = 0;
+let lastClockClickTime = 0;
+let savedOriginalUrl = null;
+const MAX_CLICK_GAP_MS = 600;
+
 function updateClock() {
-    clockElement.textContent = new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
+    if (clockElement) {
+        clockElement.textContent = new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
 }
 updateClock();
 setInterval(updateClock, 1000);
+
+function exitTimelapseMode() {
+    document.body.classList.remove('is-timelapse');
+    if (savedOriginalUrl) {
+        try {
+            history.pushState(null, '', savedOriginalUrl);
+        } catch (e) {
+            console.warn('Could not restore original URL:', e);
+        }
+        savedOriginalUrl = null;
+    }
+}
+
+function startTimelapseMode() {
+    if (sky.isTimelapse()) return;
+
+    // Preserve current exact URL with all query parameters
+    savedOriginalUrl = window.location.href;
+
+    // Navigate address bar to /timelapse/ without reloading page or regenerating flowers
+    let targetUrl = '/timelapse/';
+    try {
+        if (window.location.origin && window.location.origin !== 'null') {
+            targetUrl = new URL('/timelapse/', window.location.origin).href;
+        }
+    } catch (e) {}
+
+    try {
+        history.pushState({ timelapse: true }, '', targetUrl);
+    } catch (e) {
+        console.warn('Could not pushState for timelapse:', e);
+    }
+
+    // Hide UI elements for cinematic viewing mode
+    document.body.classList.add('is-timelapse');
+
+    // Run 45-second dynamic sky timelapse (simulating 24h)
+    sky.startTimelapse(45000, exitTimelapseMode);
+}
+
+if (clockElement) {
+    clockElement.style.pointerEvents = 'auto';
+
+    clockElement.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (sky.isTimelapse()) return;
+
+        // Easter Egg only triggers when the 'dynamic' background theme is active
+        if (sky.theme !== 'dynamic') {
+            clockClickCount = 0;
+            return;
+        }
+
+        const nowClick = Date.now();
+        if (nowClick - lastClockClickTime > MAX_CLICK_GAP_MS) {
+            // Interrupted/slow click sequence resets counter to 1
+            clockClickCount = 1;
+        } else {
+            clockClickCount++;
+        }
+        lastClockClickTime = nowClick;
+
+        if (clockClickCount >= 22) {
+            clockClickCount = 0;
+            startTimelapseMode();
+        }
+    });
+
+    clockElement.addEventListener('mousedown', (e) => {
+        // Suppress text selection during rapid consecutive clicking
+        e.preventDefault();
+    });
+
+    clockElement.addEventListener('dblclick', (e) => {
+        // Prevent accidental double-click native browser zoom/selection behaviors
+        e.preventDefault();
+    });
+}
+
+window.addEventListener('popstate', () => {
+    if (sky.isTimelapse()) {
+        sky.stopTimelapse();
+        document.body.classList.remove('is-timelapse');
+    }
+});
 
 // Responsive layout adjustment for the message area to avoid dock collision
 (() => {

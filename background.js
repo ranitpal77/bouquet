@@ -339,6 +339,40 @@ const GardenBackground = (() => {
             };
         }
 
+        let timelapseActive = false;
+        let timelapseStartMs = 0;
+        let timelapseDurationMs = 45000;
+        let timelapseStartHour = 0;
+        let timelapseOnComplete = null;
+
+        function startTimelapse(durationMs = 45000, onComplete = null) {
+            timelapseActive = true;
+            timelapseDurationMs = durationMs;
+            timelapseStartMs = performance.now();
+            timelapseOnComplete = onComplete;
+
+            if (THEMES[themeName] && THEMES[themeName].hour !== undefined) {
+                timelapseStartHour = THEMES[themeName].hour;
+            } else if (hourOverride !== null) {
+                timelapseStartHour = hourOverride;
+            } else {
+                const d = new Date();
+                timelapseStartHour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600 + d.getMilliseconds() / 3600000;
+            }
+        }
+
+        function stopTimelapse() {
+            timelapseActive = false;
+            timelapseOnComplete = null;
+        }
+
+        function getAcceleratedTime(t) {
+            if (!timelapseActive) return t;
+            const elapsed = performance.now() - timelapseStartMs;
+            const timeScaleMultiplier = (24 * 3600 * 1000) / timelapseDurationMs;
+            return t + elapsed * (timeScaleMultiplier - 1);
+        }
+
         return {
             resize(w, h, sc, base) {
                 W = w; H = h; SC = sc; BASE = base;
@@ -354,19 +388,49 @@ const GardenBackground = (() => {
                 hourOverride = (Number.isFinite(h) && h >= 0 && h <= 24) ? h : null;
             },
             get theme() { return themeName; },
+            startTimelapse,
+            stopTimelapse,
+            isTimelapse() { return timelapseActive; },
+            getAcceleratedTime,
             render(ctx, t) {
                 if (themeName === 'minimal' || !W) return null;
-                const preset = THEMES[themeName];
+                const preset = THEMES[themeName] || {};
                 let hour;
-                if (preset.hour !== undefined) {
-                    hour = preset.hour;
-                } else if (hourOverride !== null) {
-                    hour = hourOverride;
+                let renderT = getAcceleratedTime(t);
+
+                if (timelapseActive) {
+                    const nowMs = performance.now();
+                    const elapsed = nowMs - timelapseStartMs;
+                    if (elapsed >= timelapseDurationMs) {
+                        timelapseActive = false;
+                        const cb = timelapseOnComplete;
+                        timelapseOnComplete = null;
+                        if (typeof cb === 'function') cb();
+
+                        if (preset.hour !== undefined) {
+                            hour = preset.hour;
+                        } else if (hourOverride !== null) {
+                            hour = hourOverride;
+                        } else {
+                            const d = new Date();
+                            hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+                        }
+                        return renderAt(ctx, hour, t, preset);
+                    }
+
+                    const simulatedHoursElapsed = (elapsed / timelapseDurationMs) * 24.0;
+                    hour = (timelapseStartHour + simulatedHoursElapsed) % 24.0;
                 } else {
-                    const d = new Date();
-                    hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+                    if (preset.hour !== undefined) {
+                        hour = preset.hour;
+                    } else if (hourOverride !== null) {
+                        hour = hourOverride;
+                    } else {
+                        const d = new Date();
+                        hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+                    }
                 }
-                return renderAt(ctx, hour, t, preset);
+                return renderAt(ctx, hour, renderT, preset);
             }
         };
     }

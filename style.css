@@ -72,13 +72,26 @@ canvas {
     font-weight: 300;
     letter-spacing: 2px;
     user-select: none;
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: default;
+    padding: 6px 10px;
+    margin: -6px -10px;
     z-index: 9999;
     /* Stays above the canvas dynamic layers, matching the footers */
     font-variant-numeric: tabular-nums;
     /* Prevent width jitter as digits tick */
     text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
     /* Keeps light text legible on bright day sky */
+}
+
+/* Cinematic Viewing Mode (Timelapse) */
+body.is-timelapse #clock,
+body.is-timelapse #ui,
+body.is-timelapse .footer,
+body.is-timelapse .footer-left,
+body.is-timelapse .dock-layer,
+body.is-timelapse .fw {
+    display: none !important;
 }
 
 @media (max-width: 600px) {
