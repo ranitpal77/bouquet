@@ -47,7 +47,7 @@ function applyFlowerMax() {
 
 function getBaseUrl() {
     const loc = window.location;
-    const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/');
+    const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/index.html');
     return loc.protocol + '//' + loc.host + pathname;
 }
 
@@ -138,26 +138,46 @@ fontSelector.addEventListener('click', (e) => {
     updateLink();
 });
 
+const GROW_MAX = { sec: 3600, min: 60, hr: 1 };
+const GROW_MESSAGES = {
+    sec: 'Maximum growth time is 3600 seconds!',
+    min: 'Maximum growth time is 60 minutes!',
+    hr: 'Maximum growth time is 1 hour!'
+};
+const GROW_PLACEHOLDERS = {
+    sec: 'Auto timing (Max 3600 sec)',
+    min: 'Auto timing (Max 60 min)',
+    hr: 'Auto timing (Max 1 hr)'
+};
+
+function validateGrowthTimer() {
+    const unit = growUnitSelect.value;
+    const max = GROW_MAX[unit] || 3600;
+    growValueInput.max = max;
+    if (GROW_PLACEHOLDERS[unit]) {
+        growValueInput.placeholder = GROW_PLACEHOLDERS[unit];
+    }
+
+    const v = parseFloat(growValueInput.value);
+    if (Number.isFinite(v) && v > max) {
+        growValueInput.value = max;
+        showToast(GROW_MESSAGES[unit]);
+    }
+    updateLink();
+}
+
 flowerCountInput.addEventListener('input', () => {
     const max = getMaxFlowers();
     const val = parseInt(flowerCountInput.value, 10);
     if (Number.isFinite(val) && val > max) {
         flowerCountInput.value = max;
-        showToast(`MAX is ${max}`);
+        showToast(`Flower limit is ${max}!`);
     }
     updateLink();
 });
 flowerTypeSelect.addEventListener('change', updateLink);
-growValueInput.addEventListener('input', updateLink);
-growUnitSelect.addEventListener('change', () => {
-    const GROW_MAX = { sec: 3600, min: 60, hr: 1 };
-    growValueInput.max = GROW_MAX[growUnitSelect.value];
-    const v = parseFloat(growValueInput.value);
-    if (Number.isFinite(v) && v > GROW_MAX[growUnitSelect.value]) {
-        growValueInput.value = GROW_MAX[growUnitSelect.value];
-    }
-    updateLink();
-});
+growValueInput.addEventListener('input', validateGrowthTimer);
+growUnitSelect.addEventListener('change', validateGrowthTimer);
 backgroundSelect.addEventListener('change', updateLink);
 
 btnCopy.addEventListener('click', () => {

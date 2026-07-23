@@ -231,19 +231,30 @@ select option {
     font-family: 'Inter', sans-serif;
 }
 
-.link-container {
+.link-container,
+#link-preview,
+input[readonly].link-container {
     width: 100%;
     height: 42px;
     padding: 12px 14px;
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.45) !important;
     text-align: left;
     outline: none;
     cursor: text;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+.link-container:focus,
+#link-preview:focus,
+input[readonly].link-container:focus {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(0, 0, 0, 0.45);
 }
 
 .button-group {
