@@ -304,17 +304,25 @@ const GardenBackground = (() => {
 
             // Clouds
             if (feat.clouds) {
-                const cloudVis = 0.1 + 0.9 * daylight;
-                clouds.forEach(cl => {
-                    const x = ((cl.x + t * cl.speed) % (W + cl.w)) - cl.w;
-                    ctx.globalAlpha = cl.alpha * cloudVis * (1 - warmth * 0.55);
-                    ctx.drawImage(cl.sprite, x, cl.y);
-                    if (warmth > 0.02) {
-                        ctx.globalAlpha = cl.alpha * cloudVis * warmth;
-                        ctx.drawImage(cl.warmSprite, x, cl.y);
+                if (timelapseActive) {
+                    if (timelapseNeedsInit) {
+                        initTimelapseClouds(t);
+                        timelapseNeedsInit = false;
                     }
-                });
-                ctx.globalAlpha = 1;
+                    renderTimelapseClouds(ctx, daylight, warmth, t);
+                } else {
+                    const cloudVis = 0.1 + 0.9 * daylight;
+                    clouds.forEach(cl => {
+                        const x = ((cl.x + t * cl.speed) % (W + cl.w)) - cl.w;
+                        ctx.globalAlpha = cl.alpha * cloudVis * (1 - warmth * 0.55);
+                        ctx.drawImage(cl.sprite, x, cl.y);
+                        if (warmth > 0.02) {
+                            ctx.globalAlpha = cl.alpha * cloudVis * warmth;
+                            ctx.drawImage(cl.warmSprite, x, cl.y);
+                        }
+                    });
+                    ctx.globalAlpha = 1;
+                }
             }
 
             // Horizon mist
@@ -344,12 +352,125 @@ const GardenBackground = (() => {
         let timelapseDurationMs = 45000;
         let timelapseStartHour = 0;
         let timelapseOnComplete = null;
+        let timelapseClouds = [];
+        let timelapseWeatherRegime = 'DENSE';
+        let timelapseRegimeEndT = 0;
+        let timelapseNextSpawnGap = 0;
+        let timelapseNeedsInit = false;
+
+        function createTimelapseCloud(spawnX, renderT) {
+            const scale = 0.55 + Math.random() * 0.9;
+            const cw = (200 + Math.random() * 90) * scale * SC;
+            const ch = cw * (0.34 + Math.random() * 0.16);
+            const sprite = makeCloudSprite(cw, ch);
+            return {
+                sprite,
+                warmSprite: tintCloudSprite(sprite),
+                spawnX,
+                spawnT: renderT,
+                y: H * (0.03 + Math.random() * 0.38),
+                w: sprite.width,
+                speed: (0.008 + scale * 0.014) * SC,
+                alpha: 0.55 + scale * 0.3
+            };
+        }
+
+        function setNextTimelapseSpawnGap() {
+            if (timelapseWeatherRegime === 'GAP') {
+                timelapseNextSpawnGap = (500 + Math.random() * 900) * SC;
+            } else if (timelapseWeatherRegime === 'DENSE') {
+                timelapseNextSpawnGap = (30 + Math.random() * 120) * SC;
+            } else {
+                timelapseNextSpawnGap = (150 + Math.random() * 300) * SC;
+            }
+        }
+
+        function initTimelapseClouds(startRenderT) {
+            timelapseClouds = [];
+            const regimes = ['DENSE', 'SCATTERED', 'GAP'];
+            timelapseWeatherRegime = regimes[Math.floor(Math.random() * regimes.length)];
+
+            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 45000);
+            const regimeRealSecs = 4 + Math.random() * 4;
+            timelapseRegimeEndT = startRenderT + regimeRealSecs * 1000 * timeScaleRatio;
+
+            const initialCount = 4 + Math.floor(Math.random() * 5);
+            let currentX = -150 * SC;
+            const stepX = (W + 300 * SC) / Math.max(1, initialCount);
+
+            for (let i = 0; i < initialCount; i++) {
+                const perturbedX = currentX + (Math.random() - 0.5) * stepX * 0.75;
+                timelapseClouds.push(createTimelapseCloud(perturbedX, startRenderT));
+                currentX += stepX;
+            }
+
+            setNextTimelapseSpawnGap();
+        }
+
+        function renderTimelapseClouds(ctx, daylight, warmth, renderT) {
+            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 45000);
+
+            if (renderT >= timelapseRegimeEndT) {
+                if (timelapseWeatherRegime === 'GAP') {
+                    timelapseWeatherRegime = 'DENSE';
+                } else if (timelapseWeatherRegime === 'DENSE') {
+                    timelapseWeatherRegime = Math.random() < 0.6 ? 'SCATTERED' : 'GAP';
+                } else {
+                    timelapseWeatherRegime = Math.random() < 0.5 ? 'GAP' : 'DENSE';
+                }
+
+                const regimeDurationRealSecs = timelapseWeatherRegime === 'GAP' ? (3 + Math.random() * 3) : (4 + Math.random() * 5);
+                timelapseRegimeEndT = renderT + regimeDurationRealSecs * 1000 * timeScaleRatio;
+                setNextTimelapseSpawnGap();
+            }
+
+            timelapseClouds = timelapseClouds.filter(cl => {
+                const curX = cl.spawnX + (renderT - cl.spawnT) * cl.speed;
+                return curX <= W + cl.w + 60 * SC;
+            });
+
+            let leftmostX = Infinity;
+            timelapseClouds.forEach(cl => {
+                const curX = cl.spawnX + (renderT - cl.spawnT) * cl.speed;
+                if (curX < leftmostX) {
+                    leftmostX = curX;
+                }
+            });
+
+            if (leftmostX === Infinity || leftmostX > -timelapseNextSpawnGap) {
+                const newSpawnX = (leftmostX !== Infinity ? leftmostX : -150 * SC) - timelapseNextSpawnGap;
+                const newCloud = createTimelapseCloud(newSpawnX, renderT);
+
+                if (timelapseClouds.length > 0) {
+                    const lastCloud = timelapseClouds[timelapseClouds.length - 1];
+                    if (Math.abs(newCloud.y - lastCloud.y) < H * 0.08) {
+                        newCloud.y = H * (0.03 + Math.random() * 0.38);
+                    }
+                }
+
+                timelapseClouds.push(newCloud);
+                setNextTimelapseSpawnGap();
+            }
+
+            const cloudVis = 0.1 + 0.9 * daylight;
+            timelapseClouds.forEach(cl => {
+                const x = cl.spawnX + (renderT - cl.spawnT) * cl.speed;
+                ctx.globalAlpha = cl.alpha * cloudVis * (1 - warmth * 0.55);
+                ctx.drawImage(cl.sprite, x, cl.y);
+                if (warmth > 0.02) {
+                    ctx.globalAlpha = cl.alpha * cloudVis * warmth;
+                    ctx.drawImage(cl.warmSprite, x, cl.y);
+                }
+            });
+            ctx.globalAlpha = 1;
+        }
 
         function startTimelapse(durationMs = 45000, onComplete = null) {
             timelapseActive = true;
             timelapseDurationMs = durationMs;
             timelapseStartMs = performance.now();
             timelapseOnComplete = onComplete;
+            timelapseNeedsInit = true;
 
             if (THEMES[themeName] && THEMES[themeName].hour !== undefined) {
                 timelapseStartHour = THEMES[themeName].hour;
