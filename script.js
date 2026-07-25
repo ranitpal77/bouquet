@@ -5,7 +5,7 @@ let W, H, CX, BASE, SC;
 const flowers = [];
 const START = Date.now();
 
-// Interaction tracking (mouse, tilt, motion)
+// Track mouse, device tilt (gyroscope), and motion (accelerometer) for sways & parallax
 let mouseX = window.innerWidth / 2;
 let lastMouseX = window.innerWidth / 2;
 let mouseSpeed = 0;
@@ -22,6 +22,7 @@ window.addEventListener('mousemove', (e) => {
     const dt = Math.max(1, now - lastMouseTime);
     const dx = e.clientX - lastMouseX;
 
+    // Calculate mouse travel speed
     const instSpeed = Math.abs(dx) / dt;
     mouseSpeed += (instSpeed - mouseSpeed) * 0.2;
 
@@ -30,22 +31,29 @@ window.addEventListener('mousemove', (e) => {
     lastMouseTime = now;
 });
 
+// Bind sensor listeners for device orientation and motion acceleration
 function bindSensors() {
     window.addEventListener('deviceorientation', (e) => {
         if (e.gamma !== null) {
+            // Map left-right tilt (gamma in degrees) to radians of rotation (max ~24 degrees sway target)
             const targetTilt = clamp(e.gamma, -30, 30) * 0.014;
+
+            // Calculate rotational tilt speed
             const diff = Math.abs(e.gamma - lastGamma);
             tiltSpeed += (diff - tiltSpeed) * 0.12;
+
+            // Smoothly ease the device tilt lean rotation target
             tiltLean += (targetTilt - tiltLean) * 0.05;
             lastGamma = e.gamma;
         }
     });
 
     window.addEventListener('devicemotion', (e) => {
-        const acc = e.acceleration;
+        const acc = e.acceleration; // Use pure acceleration (excluding gravity) to prevent constant shaking
         if (acc) {
             const speed = Math.abs(acc.x || 0) + Math.abs(acc.y || 0) + Math.abs(acc.z || 0);
             if (speed > 4.5) {
+                // Scale shake wind gust force directly by dynamic shake speed
                 const force = clamp((speed - 4.5) / 10, 0.2, 1.0);
                 shakeWind = (Math.random() > 0.5 ? 1 : -1) * force * 0.45;
             }
@@ -54,6 +62,7 @@ function bindSensors() {
 }
 
 function initSensors() {
+    // iOS 13+ Safari requires requesting permission via user gesture
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission()
             .then(permissionState => {
@@ -65,9 +74,11 @@ function initSensors() {
     }
 }
 
+// Bind immediately if modern permission checks are not required (e.g. Android Chrome)
 if (!(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')) {
     bindSensors();
 } else {
+    // Register one-time user gesture trigger for browsers requiring authorization prompt
     window.addEventListener('click', initSensors, { once: true });
     window.addEventListener('touchstart', initSensors, { once: true });
 }
@@ -83,6 +94,7 @@ function resize() {
     sky.resize(W, H, SC, BASE);
 }
 
+// Math and easing helper utilities
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const easeOut = x => 1 - Math.pow(1 - x, 3);
 const seg = (p, s, e) => easeOut(clamp((p - s) / (e - s), 0, 1));
@@ -102,6 +114,7 @@ function bezAngle(x0, y0, cx1, cy1, cx2, cy2, x1, y1, t) {
     return Math.atan2(dy, dx);
 }
 
+// Environmental lighting pool
 function drawEnvironment() {
     const pool = ctx.createRadialGradient(CX, BASE, 10, CX, BASE - 20, W);
     pool.addColorStop(0, 'rgba(40, 20, 10, 0.2)');
@@ -371,17 +384,12 @@ function spawnAutomaticFlowers(options = {}) {
     const count = (options.count && options.count > 0) ? options.count : getResponsiveCount();
     const forcedType = (options.type && FLOWER_DEFS[options.type]) ? options.type : null;
 
-    const spread = Math.min(1, 0.12 + 0.88 * (1 - Math.exp(-(count - 1) / 11)));
-    const usable = W - 100;
-    const span = usable * spread;
-    const spanLeft = CX - span / 2;
-
     for (let i = 0; i < count; i++) {
         const type = forcedType || types[Math.floor(Math.random() * types.length)];
         const def = FLOWER_DEFS[type];
 
         const fraction = (i + 0.5) / count;
-        let tx = spanLeft + fraction * span + (Math.random() - 0.5) * (span / count * 0.4);
+        let tx = 50 + fraction * (W - 100) + (Math.random() - 0.5) * (W / count * 0.4);
         let ty = BASE - 120 - Math.random() * (H * 0.45);
 
         if (tx < 50) tx = 50;
@@ -427,45 +435,25 @@ function spawnAutomaticFlowers(options = {}) {
         flowers.push(f);
     }
 
-    if (options.totalDuration && options.totalDuration > 0 && flowers.length) {
-        const spawnNow = Date.now();
-        const maxFinish = Math.max(...flowers.map(f => (f.startTime - spawnNow) + f.duration));
-        const fix = options.totalDuration / maxFinish;
-        flowers.forEach(f => {
-            f.startTime = spawnNow + (f.startTime - spawnNow) * fix;
-            f.duration *= fix;
-        });
-    }
+    // if (options.totalDuration && options.totalDuration > 0 && flowers.length) {
+    //     const spawnNow = Date.now();
+    //     const maxFinish = Math.max(...flowers.map(f => (f.startTime - spawnNow) + f.duration));
+    //     const fix = options.totalDuration / maxFinish;
+    //     flowers.forEach(f => {
+    //         f.startTime = spawnNow + (f.startTime - spawnNow) * fix;
+    //         f.duration *= fix;
+    //     });
+    // }
 
     updateFlowerPositions();
 }
 
-// Growth stage threshold
-const BLOOM_START = 0.3;
 
-// Stem curvature morphing
-const growthBend = p => smooth01(p);
-
-// Point at material coordinate t of partially-bent stem
-function grownStemPoint(f, t, bend) {
-    const [fx, fy] = bezPt(f.bx, f.by, f.cp1x, f.cp1y, f.cp2x, f.cp2y, f.tx, f.ty, t);
-    const vy = f.by + (f.ty - f.by) * t;
-    return [f.bx + (fx - f.bx) * bend, vy + (fy - vy) * bend];
-}
-
-function buildGrownStem(f, p) {
-    const bend = growthBend(p);
-    const pts = [];
-    const steps = 24;
-    for (let i = 0; i <= steps; i++) {
-        pts.push(grownStemPoint(f, (i / steps) * p, bend));
-    }
-    return pts;
-}
 
 function draw() {
     ctx.clearRect(0, 0, W, H);
 
+    // Slowly decay dynamic speeds and shake gusts
     shakeWind *= 0.94;
     mouseSpeed *= 0.95;
     tiltSpeed *= 0.95;
@@ -474,64 +462,63 @@ function draw() {
     const t = now - START;
     const animT = sky.getAcceleratedTime(t);
 
+    // Default light ambient breeze sway (constant gentle environment motion)
     const ambientBreeze = Math.sin(animT * 0.0008) * 0.035 + Math.cos(animT * 0.0019) * 0.015;
+
+    // Calculate dynamic speed multipliers
     const mouseSpeedFactor = 0.12 + clamp(mouseSpeed, 0, 3.5) * 0.25;
     const tiltSpeedFactor = 0.18 + clamp(tiltSpeed / 6.0, 0, 1.0) * 0.82;
     const activeTiltLean = tiltLean * tiltSpeedFactor;
 
     const skyFrame = sky.render(ctx, t);
 
-    // Environment pool
+    // 1. Draw static environment reflection pool (does not shift with device tilt)
     drawEnvironment();
 
-    // Physics sway calculation
+    // Pre-calculate interactive sways using Spring-Mass-Damper physics
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
 
-        const dx = f.tx - mouseX;
+        // Inverse mouse interaction: push away from the cursor (scaled by speed factor)
+        const dx = f.tx - mouseX; // positive if flower is to the right of mouse
         const distRatio = clamp(1 - Math.abs(dx) / (W * 0.45), 0, 1);
-        const baseMouseLean = Math.sign(dx) * easeOut(distRatio) * 0.12;
+        const baseMouseLean = Math.sign(dx) * easeOut(distRatio) * 0.12; // Push away target
         const mouseLean = baseMouseLean * mouseSpeedFactor;
 
         const leanTarget = mouseLean + shakeWind + activeTiltLean + ambientBreeze;
-        const springForce = (leanTarget - f.currentLean) * 0.075;
+
+        // 2nd Order Spring-Mass-Damper physics solver
+        const springForce = (leanTarget - f.currentLean) * 0.075; // stiffness
         f.leanVelocity += springForce;
-        f.leanVelocity *= 0.88;
+        f.leanVelocity *= 0.88; // damping drag
         f.currentLean += f.leanVelocity;
     });
 
-    // Stems and leaves
+    // 2. Draw stems & leaves (rotation pivots directly from root base points at bottom)
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
 
         const sp = easeOut(rawP);
-        const bend = growthBend(sp);
 
         ctx.save();
         ctx.translate(f.bx, f.by);
         ctx.rotate(f.currentLean);
         ctx.translate(-f.bx, -f.by);
 
-        const stemPts = sp < 1 ? buildGrownStem(f, sp) : f.stemPoints;
-        drawStemPoints(stemPts, 1, f.thick, f.sd);
-        drawStemPoints(stemPts, 1, f.thick * 0.5, f.sl);
+        drawStemPoints(f.stemPoints, sp, f.thick, f.sd);
+        drawStemPoints(f.stemPoints, sp, f.thick * 0.5, f.sl);
 
         f.leafData.forEach((ld) => {
             if (sp > ld.lt) {
                 const leafProg = clamp((sp - ld.lt) * 4, 0, 1);
-                let lx = ld.lx, ly = ld.ly, lAngle = ld.lAngle;
-                if (sp < 1) {
-                    [lx, ly] = grownStemPoint(f, ld.lt, bend);
-                    lAngle = -Math.PI / 2 + (ld.lAngle + Math.PI / 2) * bend;
-                }
                 if (f.type === 'lily') {
-                    drawLilyLeaf(lx, ly, lAngle + (Math.PI / 2.8) * ld.lDir, f.size * 1.5, leafProg);
+                    drawLilyLeaf(ld.lx, ld.ly, ld.lAngle + (Math.PI / 2.8) * ld.lDir, f.size * 1.5, leafProg);
                 } else if (f.type === 'sunflower') {
-                    drawSunflowerLeaf(lx, ly, lAngle + (Math.PI / 2.5) * ld.lDir, f.size * 1.6, leafProg);
+                    drawSunflowerLeaf(ld.lx, ld.ly, ld.lAngle + (Math.PI / 2.5) * ld.lDir, f.size * 1.6, leafProg);
                 } else if (f.type === 'tulip') {
-                    drawTulipLeaf(lx, ly, lAngle + (Math.PI / 8) * ld.lDir, f.size * 2.2, leafProg);
+                    drawTulipLeaf(ld.lx, ld.ly, ld.lAngle + (Math.PI / 8) * ld.lDir, f.size * 2.2, leafProg);
                 }
             }
         });
@@ -539,7 +526,7 @@ function draw() {
         ctx.restore();
     });
 
-    // Shadow mask
+    // 3. Draw dynamic bottom shadow mask (does not shift with device tilt)
     const shadowTop = skyFrame ? BASE - H * 0.42 : BASE - 160;
     const shadowGrad = ctx.createLinearGradient(0, H, 0, shadowTop);
     const shadowStops = (skyFrame && skyFrame.shadowStops) || GardenBackground.DEFAULT_SHADOW_STOPS;
@@ -547,23 +534,31 @@ function draw() {
     ctx.fillStyle = shadowGrad;
     ctx.fillRect(0, shadowTop, W, H - shadowTop);
 
-    // Flower heads
+    // 4. Draw flower heads (swayed in unison, pivoting from base points)
     flowers.forEach((f) => {
         const rawP = Math.min((now - f.startTime) / f.duration, 1);
         if (rawP <= 0) return;
 
         const sp = easeOut(rawP);
-        const fp = easeOut(clamp((rawP - BLOOM_START) / (1 - BLOOM_START), 0, 1));
+        const fp = easeOut(clamp((rawP - 0.5) / 0.5, 0, 1));
 
-        let fx, fy, headAngle;
+        let fx, fy;
         if (sp < 1) {
-            const bend = growthBend(sp);
-            [fx, fy] = grownStemPoint(f, sp, bend);
-            headAngle = -Math.PI / 2 + (f.headAngle + Math.PI / 2) * bend;
+            const idx = (f.stemPoints.length - 1) * sp;
+            const limit = Math.floor(idx);
+            const currPt = f.stemPoints[limit];
+            if (limit < f.stemPoints.length - 1) {
+                const nextPt = f.stemPoints[limit + 1];
+                const factor = idx - limit;
+                fx = currPt[0] + (nextPt[0] - currPt[0]) * factor;
+                fy = currPt[1] + (nextPt[1] - currPt[1]) * factor;
+            } else {
+                fx = currPt[0];
+                fy = currPt[1];
+            }
         } else {
             fx = f.tx;
             fy = f.ty;
-            headAngle = f.headAngle;
         }
 
         const wob = Math.sin(animT * 0.0013 + f.wobble) * 0.05;
@@ -573,10 +568,10 @@ function draw() {
         ctx.rotate(f.currentLean);
         ctx.translate(-f.bx, -f.by);
 
-        if (f.type === 'lily') drawLilyFlower(fx, fy, f.size, fp, wob, headAngle);
-        else if (f.type === 'rose') drawRoseFlower(fx, fy, f.size, fp, wob, headAngle);
-        else if (f.type === 'sunflower') drawSunflowerFlower(fx, fy, f.size, fp, wob, headAngle);
-        else if (f.type === 'tulip') drawTulipFlower(fx, fy, f.size, fp, wob, headAngle);
+        if (f.type === 'lily') drawLilyFlower(fx, fy, f.size, fp, wob, f.headAngle);
+        else if (f.type === 'rose') drawRoseFlower(fx, fy, f.size, fp, wob, f.headAngle);
+        else if (f.type === 'sunflower') drawSunflowerFlower(fx, fy, f.size, fp, wob, f.headAngle);
+        else if (f.type === 'tulip') drawTulipFlower(fx, fy, f.size, fp, wob, f.headAngle);
         else if (f.type === 'generic') drawGenericFlower(fx, fy, f.size, fp, wob);
 
         ctx.restore();
@@ -600,6 +595,14 @@ function draw() {
 
 resize();
 window.addEventListener('resize', resize);
+
+// Clean up /index.html from URL bar for clean root URLs (e.g. /index.html?bg=day -> /?bg=day)
+if (window.location.pathname.endsWith('/index.html')) {
+    try {
+        const cleanPath = window.location.pathname.replace(/\/index\.html$/, '/') + window.location.search + window.location.hash;
+        history.replaceState(null, '', cleanPath);
+    } catch (e) { }
+}
 
 // Garden customization via URL parameters (?count, ?flower, ?grow, ?bg, ?hour)
 const MAX_FLOWERS = 100;
@@ -703,7 +706,7 @@ function startTimelapseMode() {
         if (window.location.origin && window.location.origin !== 'null') {
             targetUrl = new URL('/timelapse/', window.location.origin).href;
         }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
         history.pushState({ timelapse: true }, '', targetUrl);
@@ -772,14 +775,14 @@ window.addEventListener('popstate', () => {
     function adjustUiLayout() {
         if (!ui) return;
         if (!dockEl) dockEl = document.querySelector('.dock');
-        
+
         if (window.innerWidth > 600 && dockEl) {
             const dockWidth = dockEl.offsetWidth || 62;
             const style = window.getComputedStyle(dockEl);
             const rightOffset = parseFloat(style.right) || 18;
             const dockSpace = rightOffset + dockWidth;
             const gap = dockSpace + 24;
-            
+
             ui.style.left = `${gap}px`;
             ui.style.right = `${gap}px`;
             ui.style.width = 'auto';
@@ -796,7 +799,7 @@ window.addEventListener('popstate', () => {
     }
     window.addEventListener('resize', adjustUiLayout);
     window.addEventListener('load', adjustUiLayout);
-    
+
     const interval = setInterval(() => {
         if (document.querySelector('.dock')) {
             adjustUiLayout();
