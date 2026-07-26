@@ -117,8 +117,8 @@ function bezAngle(x0, y0, cx1, cy1, cx2, cy2, x1, y1, t) {
 // Environmental lighting pool
 function drawEnvironment() {
     const pool = ctx.createRadialGradient(CX, BASE, 10, CX, BASE - 20, W);
-    pool.addColorStop(0, 'rgba(40, 20, 10, 0.2)');
-    pool.addColorStop(1, 'rgba(0,0,0,0)');
+    pool.addColorStop(0, 'rgba(16, 12, 8, 0.18)');
+    pool.addColorStop(1, 'rgba(16, 12, 8, 0)');
     ctx.fillStyle = pool;
     ctx.fillRect(0, BASE - 100, W, H - (BASE - 100));
 }
@@ -389,7 +389,16 @@ function spawnAutomaticFlowers(options = {}) {
         const def = FLOWER_DEFS[type];
 
         const fraction = (i + 0.5) / count;
-        let tx = 50 + fraction * (W - 100) + (Math.random() - 0.5) * (W / count * 0.4);
+        let tx;
+        if (count >= 1 && count <= 10) {
+            const spanFactor = 0.35 + 0.65 * ((count - 1) / 9);
+            const center = W / 2;
+            const baseSpread = (fraction - 0.5) * (W - 100) * spanFactor;
+            const jitter = (Math.random() - 0.5) * (W / 10 * 0.4);
+            tx = center + baseSpread + jitter;
+        } else {
+            tx = 50 + fraction * (W - 100) + (Math.random() - 0.5) * (W / count * 0.4);
+        }
         let ty = BASE - 120 - Math.random() * (H * 0.45);
 
         if (tx < 50) tx = 50;
@@ -717,8 +726,8 @@ function startTimelapseMode() {
     // Hide UI elements for cinematic viewing mode
     document.body.classList.add('is-timelapse');
 
-    // Run 45-second dynamic sky timelapse (simulating 24h)
-    sky.startTimelapse(45000, exitTimelapseMode);
+    // Run 30-second dynamic sky timelapse (simulating 24h)
+    sky.startTimelapse(30000, exitTimelapseMode);
 }
 
 if (clockElement) {
