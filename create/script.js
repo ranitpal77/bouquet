@@ -45,9 +45,21 @@ function applyFlowerMax() {
     }
 }
 
+// Clean up /index.html from URL bar for clean URLs (e.g. /create/index.html -> /create/)
+if (window.location.pathname.endsWith('/index.html')) {
+    try {
+        const cleanPath = window.location.pathname.replace(/\/index\.html$/, '/') + window.location.search + window.location.hash;
+        history.replaceState(null, '', cleanPath);
+    } catch (e) { }
+}
+
 function getBaseUrl() {
     const loc = window.location;
-    const pathname = loc.pathname.replace(/\/create\/?(index\.html)?$/, '/index.html');
+    let pathname = loc.pathname;
+    // Strip trailing index.html if present
+    pathname = pathname.replace(/\/index\.html$/i, '/');
+    // Strip /create/ or /create from the end of pathname to target the root bouquet page
+    pathname = pathname.replace(/\/create\/?$/i, '/');
     return loc.protocol + '//' + loc.host + pathname;
 }
 
