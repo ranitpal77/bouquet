@@ -57,8 +57,8 @@ const GardenBackground = (() => {
     ];
 
     // Ground shadow tints
-    const GROUND_DAY = [[6, 16, 9, 0.98], [20, 44, 24, 0.82]];
-    const GROUND_NIGHT = [[2, 5, 14, 0.99], [4, 9, 22, 0.78]];
+    const GROUND_DAY = [[5, 14, 8, 0.96], [12, 28, 15, 0.75]];
+    const GROUND_NIGHT = [[2, 4, 10, 0.98], [4, 8, 18, 0.75]];
 
     // Lunar phase fraction
     const SYNODIC = 29.530588853;
@@ -120,7 +120,7 @@ const GardenBackground = (() => {
         return cv;
     }
 
-    const DEFAULT_SHADOW_STOPS = [[0, 'rgba(0, 0, 0, 0.99)'], [0.4, 'rgba(0, 0, 0, 0.78)'], [1, 'rgba(0, 0, 0, 0)']];
+    const DEFAULT_SHADOW_STOPS = [[0, 'rgba(0, 0, 0, 0.99)'], [0.3, 'rgba(0, 0, 0, 0.75)'], [0.6, 'rgba(0, 0, 0, 0.30)'], [0.82, 'rgba(0, 0, 0, 0.08)'], [1, 'rgba(0, 0, 0, 0)']];
 
     function createSky(features = {}) {
         const feat = {
@@ -287,7 +287,12 @@ const GardenBackground = (() => {
                     const f = clamp((hour - SUNRISE) / (SUNSET - SUNRISE), 0, 1);
                     const x = pins.sun ? W * pins.sun[0] : W * (0.06 + 0.88 * f);
                     const y = pins.sun ? H * pins.sun[1] : H * 0.95 - Math.sin(Math.PI * f) * H * 0.83;
-                    drawSun(ctx, x, y, sunA);
+                    const horizonY = H * 0.65;
+                    const fadeFactor = smooth01(clamp(1 - (y - horizonY) / (H * 0.15), 0, 1));
+                    const effectiveSunA = sunA * fadeFactor;
+                    if (effectiveSunA > 0.01) {
+                        drawSun(ctx, x, y, effectiveSunA);
+                    }
                 }
             }
 
@@ -298,7 +303,12 @@ const GardenBackground = (() => {
                     const f = clamp(((hour - SUNSET + 24) % 24) / (24 - SUNSET + SUNRISE), 0, 1);
                     const x = pins.moon ? W * pins.moon[0] : W * (0.94 - 0.88 * f);
                     const y = pins.moon ? H * pins.moon[1] : H * 0.95 - Math.sin(Math.PI * f) * H * 0.8;
-                    drawMoon(ctx, x, y, moonA, moonPhaseFraction(new Date()));
+                    const horizonY = H * 0.65;
+                    const fadeFactor = smooth01(clamp(1 - (y - horizonY) / (H * 0.15), 0, 1));
+                    const effectiveMoonA = moonA * fadeFactor;
+                    if (effectiveMoonA > 0.01) {
+                        drawMoon(ctx, x, y, effectiveMoonA, moonPhaseFraction(new Date()));
+                    }
                 }
             }
 
@@ -339,17 +349,26 @@ const GardenBackground = (() => {
             // Ground shadow stops
             const gs = GROUND_NIGHT.map((n, i) => n.map((v, k) => v + (GROUND_DAY[i][k] - v) * daylight));
             const rgba = c => `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${c[3].toFixed(3)})`;
-            const gsFade = gs[1].slice();
-            gsFade[3] *= 0.45;
+            const gsFade1 = gs[1].slice();
+            gsFade1[3] *= 0.45;
+            const gsFade2 = gs[1].slice();
+            gsFade2[3] *= 0.15;
+            const gsZero = [gs[1][0], gs[1][1], gs[1][2], 0];
             return {
-                shadowStops: [[0, rgba(gs[0])], [0.3, rgba(gs[1])], [0.62, rgba(gsFade)], [1, 'rgba(0, 0, 0, 0)']],
+                shadowStops: [
+                    [0, rgba(gs[0])],
+                    [0.25, rgba(gs[1])],
+                    [0.55, rgba(gsFade1)],
+                    [0.8, rgba(gsFade2)],
+                    [1, rgba(gsZero)]
+                ],
                 lighting: sampleKeys(LIGHT_KEYS, hour)
             };
         }
 
         let timelapseActive = false;
         let timelapseStartMs = 0;
-        let timelapseDurationMs = 45000;
+        let timelapseDurationMs = 30000;
         let timelapseStartHour = 0;
         let timelapseOnComplete = null;
         let timelapseClouds = [];
@@ -390,7 +409,7 @@ const GardenBackground = (() => {
             const regimes = ['DENSE', 'SCATTERED', 'GAP'];
             timelapseWeatherRegime = regimes[Math.floor(Math.random() * regimes.length)];
 
-            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 45000);
+            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 30000);
             const regimeRealSecs = 4 + Math.random() * 4;
             timelapseRegimeEndT = startRenderT + regimeRealSecs * 1000 * timeScaleRatio;
 
@@ -408,7 +427,7 @@ const GardenBackground = (() => {
         }
 
         function renderTimelapseClouds(ctx, daylight, warmth, renderT) {
-            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 45000);
+            const timeScaleRatio = (24 * 3600 * 1000) / (timelapseDurationMs || 30000);
 
             if (renderT >= timelapseRegimeEndT) {
                 if (timelapseWeatherRegime === 'GAP') {
@@ -465,7 +484,7 @@ const GardenBackground = (() => {
             ctx.globalAlpha = 1;
         }
 
-        function startTimelapse(durationMs = 45000, onComplete = null) {
+        function startTimelapse(durationMs = 30000, onComplete = null) {
             timelapseActive = true;
             timelapseDurationMs = durationMs;
             timelapseStartMs = performance.now();
