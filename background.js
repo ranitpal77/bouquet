@@ -86,36 +86,41 @@ const GardenBackground = (() => {
             c.beginPath(); c.arc(px, py, pr, 0, Math.PI * 2); c.fill();
         };
 
-        const n = 5 + Math.floor(Math.random() * 5);
+        // Scale puff count with aspect ratio and cap jitter to a fraction of one
+        // slot so adjacent puffs always overlap into one continuous mass
+        const n = Math.max(5 + Math.floor(Math.random() * 5), Math.ceil((w / h) * 3));
         for (let i = 0; i < n; i++) {
-            const fx = clamp((i + 0.5) / n + (Math.random() - 0.5) * 0.14, 0.06, 0.94);
+            const fx = clamp((i + 0.5) / n + (Math.random() - 0.5) * 0.5 / n, 0.06, 0.94);
             const centrality = 1 - Math.abs(fx - 0.5) * 2;
-            const pr = h * (0.2 + 0.13 * centrality + Math.random() * 0.1);
+            const pr = h * (0.26 + 0.13 * centrality + Math.random() * 0.1);
             const px = pad + fx * w;
             const py = pad + h * (0.6 - centrality * 0.12 + (Math.random() - 0.5) * 0.16);
             puff(px, py, pr, 0.72 + Math.random() * 0.18);
         }
 
+        // Accent puffs hug the main body (tight offsets, larger radii) so they
+        // read as bumps on one cloud rather than detached dots
         const m = 4 + Math.floor(Math.random() * 4);
         for (let i = 0; i < m; i++) {
             const ang = Math.random() * Math.PI * 2;
-            const px = pad + w * (0.5 + Math.cos(ang) * (0.3 + Math.random() * 0.18));
-            const py = pad + h * (0.55 + Math.sin(ang) * (0.22 + Math.random() * 0.12));
-            const pr = h * (0.1 + Math.random() * 0.1);
+            const px = pad + w * (0.5 + Math.cos(ang) * (0.2 + Math.random() * 0.14));
+            const py = pad + h * (0.55 + Math.sin(ang) * (0.1 + Math.random() * 0.08));
+            const pr = h * (0.16 + Math.random() * 0.1);
             puff(clamp(px, pad * 0.5, cv.width - pad * 0.5), clamp(py, pad * 0.5, cv.height - pad * 0.5), pr, 0.4 + Math.random() * 0.25);
         }
         return cv;
     }
 
     // Warm-tinted cloud copy
-    function tintCloudSprite(sprite) {
+    // Tinted cloud copy
+    function tintCloudSprite(sprite, color = 'rgba(255, 148, 92, 0.6)') {
         const cv = document.createElement('canvas');
         cv.width = sprite.width;
         cv.height = sprite.height;
         const c = cv.getContext('2d');
         c.drawImage(sprite, 0, 0);
         c.globalCompositeOperation = 'source-atop';
-        c.fillStyle = 'rgba(255, 148, 92, 0.6)';
+        c.fillStyle = color;
         c.fillRect(0, 0, cv.width, cv.height);
         return cv;
     }
@@ -132,7 +137,7 @@ const GardenBackground = (() => {
         };
 
         let W = 0, H = 0, SC = 1, BASE = 0;
-        let clouds = [], stars = [];
+        let clouds = [], stars = [], rainDrops = [];
         let sunR = 46, moonR = 34;
         let themeName = 'minimal';
         let hourOverride = null;
@@ -141,8 +146,25 @@ const GardenBackground = (() => {
         const THEMES = {
             dynamic: {},
             day: { hour: 9.2, sun: [0.17, 0.17] },
-            night: { hour: 22, moon: [0.83, 0.17] }
+            night: { hour: 22, moon: [0.83, 0.17] },
+            rain: { hour: 13, sun: false, moon: false, rain: true }
         };
+
+        function initRainDrops() {
+            rainDrops = [];
+            if (!W || !H) return;
+            const count = clamp(Math.round(W / 6), 110, 220);
+            for (let i = 0; i < count; i++) {
+                rainDrops.push({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    len: (14 + Math.random() * 22) * SC,
+                    speed: (14 + Math.random() * 10) * SC,
+                    alpha: 0.25 + Math.random() * 0.4,
+                    width: (0.7 + Math.random() * 0.8) * SC
+                });
+            }
+        }
 
         function initSprites() {
             sunR = 46 * SC;
@@ -157,7 +179,8 @@ const GardenBackground = (() => {
                     const sprite = makeCloudSprite(cw, ch);
                     clouds.push({
                         sprite,
-                        warmSprite: tintCloudSprite(sprite),
+                        warmSprite: tintCloudSprite(sprite, 'rgba(255, 148, 92, 0.6)'),
+                        rainSprite: tintCloudSprite(sprite, 'rgba(45, 58, 74, 0.65)'),
                         x: Math.random() * (W + sprite.width),
                         y: H * (0.04 + Math.random() * 0.38),
                         w: sprite.width,
@@ -179,6 +202,7 @@ const GardenBackground = (() => {
                     });
                 }
             }
+            initRainDrops();
         }
 
         function drawSun(ctx, x, y, a) {
@@ -250,14 +274,17 @@ const GardenBackground = (() => {
         }
 
         // Sky rendering engine
-        function renderAt(ctx, hour, t, pins) {
-            const daylight = rise(hour, 5.2, 7.2) * (1 - rise(hour, 18.2, 20.2));
-            const warmth = Math.max(
+        function renderAt(ctx, hour, t, pins = {}) {
+            const isRain = pins.rain || themeName === 'rain';
+            const daylight = isRain ? 0.35 : rise(hour, 5.2, 7.2) * (1 - rise(hour, 18.2, 20.2));
+            const warmth = isRain ? 0 : Math.max(
                 rise(hour, 5.4, 6.3) * (1 - rise(hour, 7.0, 8.2)),
                 rise(hour, 17.6, 18.7) * (1 - rise(hour, 19.5, 20.2))
             );
 
-            const [top, mid, bot] = sampleKeys(SKY_KEYS, hour).map(c => `rgb(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])})`);
+            const [top, mid, bot] = isRain
+                ? ['rgb(38, 48, 62)', 'rgb(68, 80, 96)', 'rgb(105, 118, 134)']
+                : sampleKeys(SKY_KEYS, hour).map(c => `rgb(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])})`);
             const sky = ctx.createLinearGradient(0, 0, 0, H);
             sky.addColorStop(0, top);
             sky.addColorStop(0.55, mid);
@@ -265,8 +292,8 @@ const GardenBackground = (() => {
             ctx.fillStyle = sky;
             ctx.fillRect(0, 0, W, H);
 
-            // Stars
-            if (feat.stars) {
+            // Stars (disabled in rain)
+            if (feat.stars && !isRain) {
                 const visible = clamp((1 - rise(hour, 4.8, 6.4)) + rise(hour, 19.4, 21), 0, 1);
                 const midnightDepth = clamp(1 - Math.min(hour, 24 - hour) / 5, 0, 1);
                 const starA = visible * (0.7 + 0.3 * midnightDepth);
@@ -281,7 +308,7 @@ const GardenBackground = (() => {
             }
 
             // Sun
-            if (feat.sun) {
+            if (feat.sun && pins.sun !== false) {
                 const sunA = rise(hour, 5.7, 6.6) * (1 - rise(hour, 18.8, 19.7));
                 if (sunA > 0.01) {
                     const f = clamp((hour - SUNRISE) / (SUNSET - SUNRISE), 0, 1);
@@ -297,7 +324,7 @@ const GardenBackground = (() => {
             }
 
             // Moon
-            if (feat.moon) {
+            if (feat.moon && pins.moon !== false) {
                 const moonA = clamp((1 - rise(hour, 5.0, 6.3)) + rise(hour, 18.9, 20.4), 0, 1);
                 if (moonA > 0.01) {
                     const f = clamp(((hour - SUNSET + 24) % 24) / (24 - SUNSET + SUNRISE), 0, 1);
@@ -321,18 +348,48 @@ const GardenBackground = (() => {
                     }
                     renderTimelapseClouds(ctx, daylight, warmth, t);
                 } else {
-                    const cloudVis = 0.1 + 0.9 * daylight;
+                    const cloudVis = isRain ? 0.9 : (0.1 + 0.9 * daylight);
                     clouds.forEach(cl => {
                         const x = ((cl.x + t * cl.speed) % (W + cl.w)) - cl.w;
-                        ctx.globalAlpha = cl.alpha * cloudVis * (1 - warmth * 0.55);
-                        ctx.drawImage(cl.sprite, x, cl.y);
-                        if (warmth > 0.02) {
-                            ctx.globalAlpha = cl.alpha * cloudVis * warmth;
-                            ctx.drawImage(cl.warmSprite, x, cl.y);
+                        if (isRain) {
+                            ctx.globalAlpha = cl.alpha * cloudVis * 0.35;
+                            ctx.drawImage(cl.sprite, x, cl.y);
+                            ctx.globalAlpha = cl.alpha * cloudVis * 0.85;
+                            ctx.drawImage(cl.rainSprite, x, cl.y);
+                        } else {
+                            ctx.globalAlpha = cl.alpha * cloudVis * (1 - warmth * 0.55);
+                            ctx.drawImage(cl.sprite, x, cl.y);
+                            if (warmth > 0.02) {
+                                ctx.globalAlpha = cl.alpha * cloudVis * warmth;
+                                ctx.drawImage(cl.warmSprite, x, cl.y);
+                            }
                         }
                     });
                     ctx.globalAlpha = 1;
                 }
+            }
+
+            // Raindrops
+            if (isRain && rainDrops.length > 0) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(210, 228, 245, 0.45)';
+                ctx.lineCap = 'round';
+                rainDrops.forEach(rd => {
+                    rd.y += rd.speed;
+                    if (rd.y > H + 30) {
+                        rd.y = -rd.len - Math.random() * 40;
+                        rd.x = Math.random() * W;
+                        rd.len = (14 + Math.random() * 22) * SC;
+                        rd.speed = (14 + Math.random() * 10) * SC;
+                    }
+                    ctx.lineWidth = rd.width;
+                    ctx.globalAlpha = rd.alpha;
+                    ctx.beginPath();
+                    ctx.moveTo(rd.x, rd.y);
+                    ctx.lineTo(rd.x, rd.y + rd.len);
+                    ctx.stroke();
+                });
+                ctx.restore();
             }
 
             // Horizon mist
@@ -347,7 +404,10 @@ const GardenBackground = (() => {
             }
 
             // Ground shadow stops
-            const gs = GROUND_NIGHT.map((n, i) => n.map((v, k) => v + (GROUND_DAY[i][k] - v) * daylight));
+            const GROUND_RAIN = [[8, 14, 20, 0.96], [16, 26, 36, 0.78]];
+            const gs = isRain
+                ? GROUND_RAIN
+                : GROUND_NIGHT.map((n, i) => n.map((v, k) => v + (GROUND_DAY[i][k] - v) * daylight));
             const rgba = c => `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${c[3].toFixed(3)})`;
             const gsFade1 = gs[1].slice();
             gsFade1[3] *= 0.45;

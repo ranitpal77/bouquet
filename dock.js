@@ -26,6 +26,7 @@ const GardenDock = (() => {
         { value: 'dynamic', label: 'Dynamic', note: 'Default' },
         { value: 'day', label: 'Day' },
         { value: 'night', label: 'Night' },
+        { value: 'rain', label: 'Rain' },
         { value: 'minimal', label: 'Minimal' }
     ];
 
