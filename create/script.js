@@ -55,12 +55,16 @@ if (window.location.pathname.endsWith('/index.html')) {
 
 function getBaseUrl() {
     const loc = window.location;
+    const origin = loc.origin || (loc.protocol + '//' + loc.host);
     let pathname = loc.pathname;
-    // Strip trailing index.html if present
+    // Strip trailing index.html if present (e.g. /create/index.html -> /create/)
     pathname = pathname.replace(/\/index\.html$/i, '/');
     // Strip /create/ or /create from the end of pathname to target the root bouquet page
     pathname = pathname.replace(/\/create\/?$/i, '/');
-    return loc.protocol + '//' + loc.host + pathname;
+    // Extra safety: ensure index.html is never present in the root path
+    pathname = pathname.replace(/\/index\.html/gi, '/');
+    if (!pathname.endsWith('/')) pathname += '/';
+    return origin + pathname;
 }
 
 function updateLink() {
