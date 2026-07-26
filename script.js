@@ -679,13 +679,84 @@ let lastClockClickTime = 0;
 let savedOriginalUrl = null;
 const MAX_CLICK_GAP_MS = 600;
 
+function getTimeZoneAbbr(date = new Date()) {
+    const locales = [undefined, 'en-IN', 'en-GB', 'en-US'];
+    for (const loc of locales) {
+        try {
+            const formatter = new Intl.DateTimeFormat(loc, { timeZoneName: 'short' });
+            const parts = formatter.formatToParts(date);
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            if (tzPart && tzPart.value && !tzPart.value.startsWith('GMT') && !tzPart.value.startsWith('UTC') && !/^[+-]?\d/.test(tzPart.value)) {
+                return tzPart.value;
+            }
+        } catch (e) { }
+    }
+
+    let tz = '';
+    try {
+        tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch (e) { }
+
+    const isDST = (d) => {
+        const jan = new Date(d.getFullYear(), 0, 1).getTimezoneOffset();
+        const jul = new Date(d.getFullYear(), 6, 1).getTimezoneOffset();
+        return Math.min(jan, jul) === d.getTimezoneOffset();
+    };
+
+    const tzMap = {
+        'Asia/Kolkata': 'IST',
+        'Asia/Calcutta': 'IST',
+        'Asia/Tokyo': 'JST',
+        'Asia/Seoul': 'KST',
+        'Asia/Shanghai': 'CST',
+        'Asia/Hong_Kong': 'HKT',
+        'Asia/Singapore': 'SGT',
+        'Asia/Dubai': 'GST',
+        'Europe/London': isDST(date) ? 'BST' : 'GMT',
+        'Europe/Dublin': isDST(date) ? 'IST' : 'GMT',
+        'Europe/Paris': isDST(date) ? 'CEST' : 'CET',
+        'Europe/Berlin': isDST(date) ? 'CEST' : 'CET',
+        'Europe/Rome': isDST(date) ? 'CEST' : 'CET',
+        'Europe/Madrid': isDST(date) ? 'CEST' : 'CET',
+        'Europe/Amsterdam': isDST(date) ? 'CEST' : 'CET',
+        'America/New_York': isDST(date) ? 'EDT' : 'EST',
+        'America/Detroit': isDST(date) ? 'EDT' : 'EST',
+        'America/Chicago': isDST(date) ? 'CDT' : 'CST',
+        'America/Indiana/Indianapolis': isDST(date) ? 'EDT' : 'EST',
+        'America/Denver': isDST(date) ? 'MDT' : 'MST',
+        'America/Phoenix': 'MST',
+        'America/Los_Angeles': isDST(date) ? 'PDT' : 'PST',
+        'America/Anchorage': isDST(date) ? 'AKDT' : 'AKST',
+        'Pacific/Honolulu': 'HST',
+        'Australia/Sydney': isDST(date) ? 'AEDT' : 'AEST',
+        'Australia/Melbourne': isDST(date) ? 'AEDT' : 'AEST',
+        'Australia/Brisbane': 'AEST',
+        'Australia/Perth': 'AWST',
+        'Pacific/Auckland': isDST(date) ? 'NZDT' : 'NZST'
+    };
+
+    if (tz && tzMap[tz]) return tzMap[tz];
+
+    try {
+        const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(date);
+        const tzPart = parts.find(p => p.type === 'timeZoneName');
+        if (tzPart && tzPart.value) return tzPart.value;
+    } catch (e) { }
+
+    return '';
+}
+
 function updateClock() {
     if (clockElement) {
-        clockElement.textContent = new Date().toLocaleTimeString([], {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
-            second: '2-digit'
+            second: '2-digit',
+            hour12: false
         });
+        const tzAbbr = getTimeZoneAbbr(now);
+        clockElement.textContent = tzAbbr ? `${timeStr} ${tzAbbr}` : timeStr;
     }
 }
 updateClock();
